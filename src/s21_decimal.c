@@ -10,14 +10,17 @@ enum n { LOW, MID, HIGH, SCALE };
 int s21_add(s21_decimal value_1, s21_decimal value_2, s21_decimal *result);
 
 void print_bits_s21_decimal(s21_decimal value);
-int set_bit();
+int set_bit(s21_decimal *value, int n);
+int get_bit(s21_decimal value, int n);
 
 int main() {
   s21_decimal value = {{22, 22, 22, 22}};
   // value.bits[3] <<= 15;
   // value.bits[3] |= 1 << 22;
   print_bits_s21_decimal(value);
+  get_bit(value, 128);
   set_bit(&value, 128);
+  get_bit(value, 128);
   print_bits_s21_decimal(value);
   return 0;
 }
@@ -61,9 +64,20 @@ int set_bit(s21_decimal *value, int n) {
   int res = 0;
   if (n < 0 || n > 128) {
     res = 1;
-    printf("n_error\n");
+    printf("set_error\n");
   } else {
     value->bits[n / 33] |= (1 << (n % 32));
+  }
+  return res;
+}
+
+int get_bit(s21_decimal value, int n) {
+  int res = 2;
+  if (n < 0 || n > 128) {
+    printf("get_error\n");
+  } else {
+    res = value.bits[n / 33] & (1 << (n % 32));
+    printf("get[%d] = %d\n", n, res);
   }
   return res;
 }

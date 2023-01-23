@@ -5,7 +5,7 @@ OB=s21_decimal
 GCOV=--coverage
 SANI=-fsanitize=address -g
 
-all : f out
+all : out
 
 clean :
 	rm -rf *.o
