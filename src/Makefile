@@ -1,7 +1,7 @@
 GC=gcc
 CFLAGS=-std=c11 -Wall -Wextra -Werror 
-OB=s21_decimal
-# LIB=s21_string
+TEST=s21_test
+LIB=s21_decimal
 GCOV=--coverage
 SANI=-fsanitize=address -g
 
@@ -18,15 +18,41 @@ clean :
 	rm -rf test
 	# rm -rf ../tests/*.o
 
+test : clean $(LIB).a $(TEST).o
+	$(GC) $(CFLAGS) $(TEST).o -l check -L. $(LIB).a -o test 
+	./test
 
-# мой мейник
-f : clean $(OB).o # $(LIB).a 
-	$(GC) $(CFLAGS) $(OB).o  -o f
+$(TEST).o : $(TEST).c
+	$(GC) $(CFLAGS) -c $(TEST).c
+
+
+# библиотека для теста
+$(LIB).a : $(LIB).c
+	$(GC) -c $(LIB).c
+	ar rc  $(LIB).a $(LIB).o
+	ranlib $(LIB).a
+
+# проверки lcov и brew
+lcov:
+ifeq ("", "$(wildcard ~/goinfre/homebrew/bin/lcov)")
+	$(error Need to install lcov: make lcov_install)
+endif
+
+lcov_install :  brew
+	brew install lcov 
+
+brew:
+ifeq ("", "$(wildcard ~/goinfre/homebrew)")
+	git clone https://github.com/Homebrew/brew ~/goinfre/homebrew
+	~/goinfre/homebrew/bin/brew shellenv
+endif
 
 out: f	
 	./f > 1.txt
 
-$(OB).o : $(OB).c
-	$(GC) $(CFLAGS) -c $(OB).c
+# мой мейник
+f : clean f.o $(LIB).a 
+	$(GC) $(CFLAGS) f.o  -L. $(LIB).a -o f
 
-
+f.o : f.c
+	$(GC) $(CFLAGS) -c f.c
