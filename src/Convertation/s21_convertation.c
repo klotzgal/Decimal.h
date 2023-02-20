@@ -63,11 +63,11 @@ int checkbit32(const int value, const int position) {
   return ((value & (1 << position)) != 0);
 }
 
-void init_decimal(s21_decimal *dec) {
+void init_decimal(s21_decimal *dec, char type) {
   dec->bits[LOW] = 0u;
+  dec->bits[SCALE] = 0u;
   dec->bits[MID] = 0u;
   dec->bits[HIGH] = 0u;
-  dec->bits[SCALE] = 0u;
 }
 
 /*целое в децимал*/
@@ -75,6 +75,7 @@ int s21_from_int_to_decimal(int src, s21_decimal *dst) {
   // не работает с INT_MIN
   int result = CONV_OK;
   if (dst) {
+    init_decimal(dst, 'a');
     if (src < 0) {
       src = -src;
       set_sign(dst, '-');
@@ -87,11 +88,15 @@ int s21_from_int_to_decimal(int src, s21_decimal *dst) {
 }
 /*из децимал в целое*/
 int s21_from_decimal_to_int(s21_decimal src, int *dst) {
+  // работает ли с INT_MIN?
   // обрезаем дробную часть
+  // переводить первые 64 бита в long int? или забить оставить так?
+
   int result = CONV_OK;
-  if (src.bits[LOW] < INT_MAX && src.bits[LOW] > INT_MAX) {
-    int sign = (check_bit(src, 127) == 1) ? -1 : 1;
-    *dst = src.bits[LOW] * sign;
+  int sign = (check_bit(src, 127) == 1) ? -1 : 1;
+  long long tmp = src.bits[LOW] * sign;
+  if (tmp <= INT_MAX && tmp >= INT_MIN && dst) {
+    dst = (int)tmp;
   } else {
     result = CONV_ERR;
   }
@@ -101,41 +106,59 @@ int s21_from_decimal_to_int(s21_decimal src, int *dst) {
 
 /* число с плавающей точкой в децимал */
 int s21_from_float_to_decimal(float src, s21_decimal *dst) {
-  init_decimal(dst);
+  // добавить проверки на бесконечность src
   int result = CONV_OK;
-  char scale = 0;
-  printf("my num1 = %f\n", src);
-  if (src < 0) {
-    set_sign(dst, '-');
-    src = -src;
-  };
-
-  int exp = get_exp(src);
-  double tmp = (double)src;
-  // достали экспоненту
-
-  if (exp >= 95 || exp <= -96) {
+  if (isinff(src) != 0 || src < 1e-28 || !(dst)) {
     result = CONV_ERR;
   } else {
-    for (; (int)tmp == 0 && scale < 29; scale++) tmp *= 10;
-    // нормализовали число
-    for (int prec = 0; scale < 29 && prec < 6; scale++, prec++) tmp *= 10;
-    // работаем с точностью
-    // сейчас мы получили нужное нам целое число, от остальных чисел можем
-    // избавляться. Нам нужно только 7 значящих цифр, 1 значящую цифру мы
-    // получили после нормализации
+    if (src < 0) {
+      set_sign(dst, '-');
+      src = -src;
+    };
+    char scale = 0;
+    int exp = get_exp(src);
+    double tmp = (double)src;
+    // достали экспоненту
+    if (exp >= 96 || exp <= -96) {
+      result = CONV_ERR;
+    } else {
+      init_decimal(dst, 'a');
+      for (; (int)tmp == 0 && scale < 29; scale++) tmp *= 10;
+      // нормализовали число
+      for (int prec = 0; scale < 29 && prec < 6; scale++, prec++) tmp *= 10;
+      // работаем с точностью
+      // сейчас мы получили нужное нам целое число, от остальных чисел можем
+      // избавляться. Нам нужно только 7 значящих цифр, 1 значящую цифру мы
+      // получили после нормализации
 
-    tmp = round(tmp);
-    // округляем до ближайшего целого
-    for (; fmod(tmp, 10) == 0 && scale > 0; scale--) tmp /= 10;
-    // если число и до этого не нуждалось в увиличении точности, то мы его
-    // урезаем. При этом помним, что scale не может быть меньше 0
-    // теперь число у нас целое и только со значимыми числами
-    // так как цифр значимых только 7 оно должно поместиться в unsigned int
-    set_scale(dst, scale);
-    // устанавливаем степень 10 в decimal
-    s21_from_int_to_decimal((unsigned int)tmp, dst);
-  };
+      tmp = round(tmp);
+      // округляем до ближайшего целого
+      for (; fmod(tmp, 10) == 0 && scale > 0; scale--) tmp /= 10;
+      // если число и до этого не нуждалось в увеличении точности, то мы его
+      // урезаем. При этом помним, что scale не может быть меньше 0
+      // теперь число у нас целое и только со значимыми числами
+      // так как цифр значимых только 7 оно должно поместиться в unsigned int
+      set_scale(dst, scale);
+      // устанавливаем степень 10 в decimal
+      s21_from_int_to_decimal((unsigned int)tmp, dst);
+    }
+  }
+  return result;
+}
+
+int s21_from_decimal_to_float(s21_decimal src, float *dst) {
+  // для проверки попадает ли децимал в промежуток флоата нужно готовое
+  // сравнение, но допустим, что в функцию прислали валидные данные
+  int result = CONV_OK;
+  unsigned long tmp = src.bits[LOW];
+  unsigned char power = get_scale(src);
+  int sign = (check_bit(src, 127) == 1) ? -1 : 1;
+  if (power < 28 && power != 0)
+    *dst = sign * (float)tmp * pow(10, -power);
+  else if (power == 0)
+    *dst = sign * (float)tmp;
+  else
+    result = CONV_ERR;
   return result;
 }
 
@@ -143,6 +166,11 @@ void set_scale(s21_decimal *dec, char power) {
   converter scale = {dec->bits[SCALE]};
   scale.bytes[2] = power;
   dec->bits[SCALE] = scale.number;
+}
+
+unsigned char get_scale(s21_decimal dec) {
+  converter scale = {dec.bits[SCALE]};
+  return scale.bytes[2];
 }
 
 int get_exp(float num) {

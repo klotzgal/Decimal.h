@@ -36,7 +36,7 @@ int s21_from_int_to_decimal(int src, s21_decimal *dst);
 int s21_from_decimal_to_int(s21_decimal src, int *dst);
 int s21_from_float_to_decimal(float src, s21_decimal *dst);
 
-void init_decimal(s21_decimal *dec);
+void init_decimal(s21_decimal *dec, char type);
 unsigned int mask(unsigned int index);
 int check_bit(s21_decimal dec, unsigned int index);
 void unset_bit(s21_decimal *dec, unsigned int index);
